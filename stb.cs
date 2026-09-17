@@ -10,6 +10,8 @@ namespace ScrollThroughBlocker
     public class ScrollThroughBlockerPlugin : MonoBehaviour
     {
         private const string HarmonyID = "com.extraext.scrollthroughblocker";
+        private const string LockID = "ScrollThroughBlocker_CameraLock";
+        private bool isLockActive = false;
 
         private void Awake()
         {
@@ -19,17 +21,43 @@ namespace ScrollThroughBlocker
             {
                 var harmony = new Harmony(HarmonyID);
                 harmony.PatchAll();
-                UnityEngine.Debug.Log("[ScrollThroughBlocker] Optimized Harmony hooks initialized successfully.");
+                UnityEngine.Debug.Log("[ScrollThroughBlocker] Initialized successfully.");
             }
             catch (Exception ex)
             {
-                UnityEngine.Debug.LogError("[ScrollThroughBlocker] Failed to initialize Harmony patches: " + ex.Message);
+                UnityEngine.Debug.LogError("[ScrollThroughBlocker] Harmony patch error: " + ex.Message);
             }
         }
 
         private void Update()
         {
             ScrollBlockerManager.UpdateFrame();
+
+            if (ScrollBlockerManager.IsMouseOverUI)
+            {
+                if (!isLockActive)
+                {
+                    InputLockManager.SetControlLock(ControlTypes.CAMERACONTROLS, LockID);
+                    isLockActive = true;
+                }
+            }
+            else
+            {
+                if (isLockActive)
+                {
+                    InputLockManager.RemoveControlLock(LockID);
+                    isLockActive = false;
+                }
+            }
+        }
+
+        private void OnDestroy()
+        {
+            if (isLockActive)
+            {
+                InputLockManager.RemoveControlLock(LockID);
+                isLockActive = false;
+            }
         }
     }
 
@@ -108,57 +136,6 @@ namespace ScrollThroughBlocker
         public static void Prefix(Rect clientRect)
         {
             ScrollBlockerManager.RegisterWindowRect(clientRect);
-        }
-    }
-
-    [HarmonyPatch(typeof(AxisBinding), nameof(AxisBinding.GetAxis))]
-    public static class Patch_AxisBinding_GetAxis
-    {
-        [HarmonyPrefix]
-        public static bool Prefix(AxisBinding __instance, ref float __result)
-        {
-            if (GameSettings.AXIS_MOUSEWHEEL != null && __instance == GameSettings.AXIS_MOUSEWHEEL)
-            {
-                if (ScrollBlockerManager.IsMouseOverUI)
-                {
-                    __result = 0f; 
-                    return false; 
-                }
-            }
-            return true;
-        }
-    }
-
-    [HarmonyPatch(typeof(Input), nameof(Input.GetAxis), new Type[] { typeof(string) })]
-    public static class Patch_Input_GetAxis
-    {
-        [HarmonyPrefix]
-        public static bool Prefix(string axisName, ref float __result)
-        {
-            if (axisName == "Mouse ScrollWheel")
-            {
-                if (ScrollBlockerManager.IsMouseOverUI)
-                {
-                    __result = 0f;
-                    return false;
-                }
-            }
-            return true;
-        }
-    }
-
-    [HarmonyPatch(typeof(Input), "mouseScrollDelta", MethodType.Getter)]
-    public static class Patch_Input_mouseScrollDelta
-    {
-        [HarmonyPrefix]
-        public static bool Prefix(ref Vector2 __result)
-        {
-            if (ScrollBlockerManager.IsMouseOverUI)
-            {
-                __result = Vector2.zero;
-                return false;
-            }
-            return true;
         }
     }
 }
