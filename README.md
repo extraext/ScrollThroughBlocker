@@ -12,3 +12,6 @@ directory.
 #### **License details:**
 [GPL-3.0](https://www.gnu.org/licenses/gpl-3.0.en.html).
 
+---
+**Special thanks to @linuxgurugamer for his continued testing of the mod!**
+
