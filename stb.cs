@@ -24,11 +24,12 @@ namespace ScrollThroughBlocker
         private ApplicationLauncherButton appLauncherButton;
         private Texture2D iconTexture;
         private bool showGUI = false;
-        private Rect guiRect = new Rect(Screen.width - 250, 40, 240, 55);
+        private Rect guiRect = new Rect(Screen.width - 250, 40, 240, 75);
 
         private readonly List<MonoBehaviour> wasdInstances = new List<MonoBehaviour>();
         private readonly HashSet<MonoBehaviour> wasdDisabledByUs = new HashSet<MonoBehaviour>();
         private bool wasdModInstalled = false;
+        private bool ivaDisabledByUs = false;
 
         private void Awake()
         {
@@ -37,6 +38,7 @@ namespace ScrollThroughBlocker
             wasdModInstalled = DetectWasdModInstalled();
 
             ScrollBlockerManager.blockWasdInEditor = PlayerPrefs.GetInt("STB_BlockWasdEditor", 1) == 1;
+            ScrollBlockerManager.blockIva = PlayerPrefs.GetInt("STB_BlockIva", 1) == 1;
 
             try
             {
@@ -105,6 +107,13 @@ namespace ScrollThroughBlocker
                 InputLockManager.RemoveControlLock(ScrollRectLockID);
                 isScrollRectLockActive = false;
             }
+
+            if (ivaDisabledByUs)
+            {
+                if (InternalCamera.Instance != null)
+                    InternalCamera.Instance.enabled = true;
+                ivaDisabledByUs = false;
+            }
         }
 
         private void OnLevelLoaded(GameScenes scene)
@@ -113,6 +122,7 @@ namespace ScrollThroughBlocker
             isScrollRectLockActive = false;
             wasdInstances.Clear();
             wasdDisabledByUs.Clear();
+            ivaDisabledByUs = false;
         }
 
         private void OnAppLauncherReady()
@@ -164,6 +174,15 @@ namespace ScrollThroughBlocker
                 PlayerPrefs.Save();
             }
 
+            bool previousIvaState = ScrollBlockerManager.blockIva;
+            ScrollBlockerManager.blockIva = GUILayout.Toggle(ScrollBlockerManager.blockIva, " Block camera scroll in IVA");
+
+            if (previousIvaState != ScrollBlockerManager.blockIva)
+            {
+                PlayerPrefs.SetInt("STB_BlockIva", ScrollBlockerManager.blockIva ? 1 : 0);
+                PlayerPrefs.Save();
+            }
+
             GUILayout.EndVertical();
             GUI.DragWindow();
         }
@@ -208,7 +227,7 @@ namespace ScrollThroughBlocker
                 }
             }
 
-            bool shouldBlockWasd = isHovering || overScrollRect;
+            bool shouldBlockCamera = isHovering || overScrollRect;
 
             if (HighLogic.LoadedSceneIsEditor && ScrollBlockerManager.blockWasdInEditor)
             {
@@ -229,7 +248,7 @@ namespace ScrollThroughBlocker
 
                 if (wasdInstances.Count > 0)
                 {
-                    if (shouldBlockWasd)
+                    if (shouldBlockCamera)
                     {
                         for (int i = 0; i < wasdInstances.Count; i++)
                         {
@@ -265,6 +284,34 @@ namespace ScrollThroughBlocker
                 }
                 wasdInstances.Clear();
             }
+
+            bool inIva = ScrollBlockerManager.blockIva &&
+                CameraManager.Instance != null &&
+                (CameraManager.Instance.currentCameraMode == CameraManager.CameraMode.IVA ||
+                 CameraManager.Instance.currentCameraMode == CameraManager.CameraMode.Internal);
+
+            if (inIva && InternalCamera.Instance != null)
+            {
+                if (shouldBlockCamera)
+                {
+                    if (InternalCamera.Instance.enabled)
+                    {
+                        InternalCamera.Instance.enabled = false;
+                        ivaDisabledByUs = true;
+                    }
+                }
+                else if (ivaDisabledByUs)
+                {
+                    InternalCamera.Instance.enabled = true;
+                    ivaDisabledByUs = false;
+                }
+            }
+            else if (ivaDisabledByUs)
+            {
+                if (InternalCamera.Instance != null)
+                    InternalCamera.Instance.enabled = true;
+                ivaDisabledByUs = false;
+            }
         }
     }
 
@@ -272,6 +319,7 @@ namespace ScrollThroughBlocker
     {
         public static bool blockNativeUI = false;
         public static bool blockWasdInEditor = true;
+        public static bool blockIva = true;
 
         private static readonly List<Rect> recordedRects = new List<Rect>(64);
         private static readonly List<Rect> activeRects = new List<Rect>(64);
